@@ -1,26 +1,70 @@
 {
+  "A1": [
+    {"task": "listening", "text": "Hello, my name is Tom."},
+    {"task": "listening", "text": "I have a cat."},
+    {"task": "listening", "text": "The sky is blue."},
+    {"task": "listening", "text": "Good morning, teacher."},
+    {"task": "listening", "text": "I like apples."},
+    {"task": "speaking", "text": "What is your name?"},
+    {"task": "speaking", "text": "I am fine, thank you."},
+    {"task": "speaking", "text": "This is my book."},
+    {"task": "speaking", "text": "Where is the school?"},
+    {"task": "speaking", "text": "I go to school by bus."}
+  ],
   "A2": [
     {"task": "listening", "text": "I drink coffee every morning before work."},
     {"task": "listening", "text": "She goes to the park on Sunday."},
     {"task": "listening", "text": "The bookstore is next to the bank."},
+    {"task": "listening", "text": "We usually have dinner at seven."},
+    {"task": "listening", "text": "He forgot his umbrella again."},
+    {"task": "listening", "text": "The train leaves in ten minutes."},
     {"task": "speaking", "text": "What time does the train arrive?"},
     {"task": "speaking", "text": "I would like a glass of water, please."},
-    {"task": "speaking", "text": "Can you help me carry this bag?"}
+    {"task": "speaking", "text": "Can you help me carry this bag?"},
+    {"task": "speaking", "text": "The weather is nice today."},
+    {"task": "speaking", "text": "I usually walk to the office."},
+    {"task": "speaking", "text": "Could you repeat that, please?"}
   ],
   "B1": [
     {"task": "listening", "text": "If it rains tomorrow, we will cancel the picnic."},
     {"task": "listening", "text": "He has been learning English for three years."},
     {"task": "listening", "text": "The meeting has been postponed until next Friday."},
+    {"task": "listening", "text": "She used to live in Shanghai, but now she is in Beijing."},
+    {"task": "listening", "text": "I am looking forward to the weekend."},
+    {"task": "listening", "text": "They decided to start the project without waiting."},
     {"task": "speaking", "text": "I am looking forward to hearing from you soon."},
     {"task": "speaking", "text": "Could you explain the main reason for the delay?"},
-    {"task": "speaking", "text": "We should consider all the possible options."}
+    {"task": "speaking", "text": "We should consider all the possible options."},
+    {"task": "speaking", "text": "I have never been to Japan, but I hope to go."},
+    {"task": "speaking", "text": "The movie was more interesting than I expected."},
+    {"task": "speaking", "text": "Unless it rains, we will have the party outside."}
   ],
   "B2": [
     {"task": "listening", "text": "The study suggests that early intervention significantly reduces long-term costs."},
     {"task": "listening", "text": "Despite the economic downturn, the company managed to increase its revenue."},
     {"task": "listening", "text": "Scientists have identified a new species in the deep ocean trench."},
+    {"task": "listening", "text": "The policy, which was introduced last year, has been widely criticized."},
+    {"task": "listening", "text": "Researchers argue that the benefits outweigh the potential risks."},
+    {"task": "listening", "text": "It is essential that we address this issue before it escalates."},
     {"task": "speaking", "text": "From my perspective, the advantages outweigh the disadvantages."},
     {"task": "speaking", "text": "I would argue that the policy needs a thorough reassessment."},
-    {"task": "speaking", "text": "The findings raise a number of important methodological questions."}
+    {"task": "speaking", "text": "The findings raise a number of important methodological questions."},
+    {"task": "speaking", "text": "Having considered all the options, we decided to proceed."},
+    {"task": "speaking", "text": "The report highlights a growing gap between theory and practice."},
+    {"task": "speaking", "text": "What concerns me most is the lack of reliable data."}
+  ],
+  "C1": [
+    {"task": "listening", "text": "The phenomenon, though not fully understood, has far-reaching implications."},
+    {"task": "listening", "text": "Critics contend that the methodology suffers from a fundamental flaw."},
+    {"task": "listening", "text": "The findings lend support to the hypothesis that sleep deprivation impairs cognition."},
+    {"task": "listening", "text": "Paradoxically, the very policy intended to reduce inequality may exacerbate it."},
+    {"task": "listening", "text": "The study draws on a decade of longitudinal data from twelve countries."},
+    {"task": "listening", "text": "It is conceivable that technological disruption could render the industry obsolete."},
+    {"task": "speaking", "text": "Admittedly, the evidence is far from conclusive."},
+    {"task": "speaking", "text": "What strikes me is the discrepancy between rhetoric and reality."},
+    {"task": "speaking", "text": "The results must be interpreted with considerable caution."},
+    {"task": "speaking", "text": "Had they anticipated the crisis, the outcome might have been different."},
+    {"task": "speaking", "text": "There is a growing consensus that current models are inadequate."},
+    {"task": "speaking", "text": "The implications extend well beyond the immediate context."}
   ]
 }

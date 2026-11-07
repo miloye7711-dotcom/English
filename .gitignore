@@ -8,3 +8,7 @@ _tmp_*
 *.mp3
 .webm
 .DS_Store
+nltk_data/
+*.pt
+*.bin
+models/

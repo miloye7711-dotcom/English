@@ -52,21 +52,32 @@ async def answer(
     # reconstruct the item
     it = _find_item(item_id, task)
     conf = 1.0
-    if task == "speaking" and audio is not None and not speaking_transcript:
-        # use Whisper if available
-        from .asr import get_asr
-        asr = get_asr()
-        if getattr(asr, "available", lambda: False)():
-            tmp = f"_tmp_{audio.filename}"
-            with open(tmp, "wb") as f:
-                f.write(await audio.read())
-            tr = asr.transcribe(tmp)
-            speaking_transcript = tr.text
-            conf = tr.avg_confidence
-            os.remove(tmp)
+    audio_path = None
+    if task == "speaking" and audio is not None:
+        audio_path = f"_tmp_{audio.filename}"
+        with open(audio_path, "wb") as f:
+            f.write(await audio.read())
+        # ASR transcription if no transcript provided
+        if not speaking_transcript:
+            from .asr import get_asr
+            asr = get_asr()
+            if getattr(asr, "available", lambda: False)():
+                tr = asr.transcribe(audio_path)
+                speaking_transcript = tr.text
+                conf = tr.avg_confidence
     result = trainer.submit(it, listening_text=listening_text,
                             speaking_transcript=speaking_transcript,
                             speaking_confidence=conf)
+    # phoneme-level feedback when audio was provided and scorer is available
+    if audio_path and task == "speaking":
+        try:
+            from .phoneme import get_phoneme_scorer
+            ps = get_phoneme_scorer()
+            if ps.available():
+                result["phoneme"] = ps.score(it.text, audio_path).as_dict()
+        except Exception as e:  # noqa: BLE001
+            result["phoneme"] = {"available": False, "note": str(e)}
+        os.remove(audio_path)
     return result
 
 
