@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>英语听说自适应训练</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --accent:#38bdf8; --ok:#34d399; --bad:#f87171; --muted:#94a3b8; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+         background:var(--bg); color:#e2e8f0; padding:24px; }
+  .wrap { max-width:760px; margin:0 auto; }
+  h1 { font-size:22px; margin:0 0 16px; }
+  .bar { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px;
+         background:var(--card); padding:14px 16px; border-radius:12px; font-size:14px; }
+  .bar b { color:var(--accent); }
+  .card { background:var(--card); border-radius:14px; padding:22px; margin-bottom:16px; }
+  .task-label { font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+  .sentence { font-size:22px; margin:14px 0; line-height:1.5; }
+  input[type=text] { width:100%; padding:12px; font-size:16px; border-radius:8px;
+                     border:1px solid #334155; background:#0b1220; color:#e2e8f0; }
+  button { background:var(--accent); color:#0b1220; border:0; padding:11px 18px;
+           font-size:15px; border-radius:8px; cursor:pointer; font-weight:600; }
+  button.secondary { background:#334155; color:#e2e8f0; }
+  .row { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
+  .feedback { margin-top:16px; padding:14px; border-radius:10px; background:#0b1220; font-size:14px; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); }
+  .muted { color:var(--muted); }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>英语听说自适应训练闭环</h1>
+  <div class="bar" id="bar">加载中…</div>
+
+  <div class="card" id="quizCard">
+    <div class="task-label" id="taskLabel">任务</div>
+    <div class="sentence" id="sentence"></div>
+
+    <div id="listenPanel">
+      <button id="playBtn">▶ 播放句子（听力）</button>
+      <div class="muted" style="margin-top:8px">听完后写下你听到的句子：</div>
+      <input type="text" id="listenInput" placeholder="type what you hear...">
+    </div>
+
+    <div id="speakPanel" class="hidden">
+      <div class="muted">跟读下面这句，并把你说的转写文本填进来（演示模式；接入 Whisper 后可直接录音）：</div>
+      <input type="text" id="speakInput" placeholder="what you said...">
+    </div>
+
+    <div class="row">
+      <button id="submitBtn">提交</button>
+      <button class="secondary" id="resetBtn">重置进度</button>
+    </div>
+    <div class="feedback hidden" id="feedback"></div>
+  </div>
+</div>
+
+<script>
+let currentItem = null;
+
+async function getJSON(url, opts={}) {
+  const r = await fetch(url, opts); return r.json();
+}
+
+function speak(text) {
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "en-US"; u.rate = 0.95;
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+
+async function refresh() {
+  const st = await getJSON("/api/state");
+  document.getElementById("bar").innerHTML = `
+    当前等级 <b>${st.level}</b> · 阶段 <b>${st.phase}</b> · 弱项 <b>${st.weakness}</b> ·
+    本阶段已练 <b>${st.practice_count}</b> 单元`;
+  await loadNext();
+}
+
+async function loadNext() {
+  const data = await getJSON("/api/next");
+  if (data.batch_done) {
+    handleBatchDone(data); return;
+  }
+  currentItem = data.item;
+  const fb = document.getElementById("feedback");
+  fb.classList.add("hidden");
+  if (!currentItem) { document.getElementById("sentence").textContent = "完成"; return; }
+  const isListen = currentItem.task === "listening";
+  document.getElementById("taskLabel").textContent =
+    (isListen ? "听力听写 " : "口语跟读 ") + "· " + currentItem.level;
+  document.getElementById("listenPanel").classList.toggle("hidden", !isListen);
+  document.getElementById("speakPanel").classList.toggle("hidden", isListen);
+  // For listening: hide the sentence text (user must hear it).
+  document.getElementById("sentence").textContent = isListen ? "（听句子，然后听写）" : currentItem.text;
+  document.getElementById("listenInput").value = "";
+  document.getElementById("speakInput").value = "";
+  if (isListen) {
+    document.getElementById("playBtn").onclick = () => speak(currentItem.text);
+  } else {
+    document.getElementById("playBtn").onclick = () => speak(currentItem.text);
+  }
+}
+
+function handleBatchDone(data) {
+  const fb = document.getElementById("feedback");
+  fb.classList.remove("hidden");
+  let html = "";
+  if (data.diagnose) {
+    html = `摸底完成：定级 <b>${data.diagnose.placed_level}</b>，弱项 <b>${data.diagnose.weakness}</b>
+            （听力 ${data.diagnose.listening} / 口语 ${data.diagnose.speaking}）`;
+  } else if (data.evaluate) {
+    const e = data.evaluate;
+    const cls = e.action === "UP" ? "ok" : (e.action === "DOWN" ? "bad" : "");
+    html = `评估完成：听力 ${e.listening} / 口语 ${e.speaking} →
+            <span class="${cls}"><b>${e.action}</b></span>。${e.reason}`;
+  }
+  fb.innerHTML = html + "<br><span class='muted'>即将进入下一阶段…</span>";
+  setTimeout(refresh, 1800);
+}
+
+async function submit() {
+  if (!currentItem) return;
+  const fd = new FormData();
+  fd.append("item_id", currentItem.item_id);
+  fd.append("task", currentItem.task);
+  if (currentItem.task === "listening") {
+    fd.append("listening_text", document.getElementById("listenInput").value);
+  } else {
+    fd.append("speaking_transcript", document.getElementById("speakInput").value);
+  }
+  const res = await getJSON("/api/answer", { method:"POST", body: fd });
+  const fb = document.getElementById("feedback");
+  fb.classList.remove("hidden");
+  const sc = res.score;
+  fb.innerHTML = `准确率 <b class="${sc.accuracy>=0.75?'ok':'bad'}">${(sc.accuracy*100).toFixed(0)}%</b>
+    · WER ${sc.wer}
+    ${sc.wrong_words.length ? '<br>需注意的词：<span class="bad">'+sc.wrong_words.join(", ")+'</span>' : '<br><span class="ok">全对！</span>'}`;
+  // brief pause then load next
+  setTimeout(loadNext, 900);
+}
+
+document.getElementById("submitBtn").onclick = submit;
+document.getElementById("resetBtn").onclick = async () => {
+  await getJSON("/api/reset", {method:"POST"}); refresh();
+};
+refresh();
+</script>
+</body>
+</html>

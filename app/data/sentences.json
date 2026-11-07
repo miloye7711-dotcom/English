@@ -1,0 +1,26 @@
+{
+  "A2": [
+    {"task": "listening", "text": "I drink coffee every morning before work."},
+    {"task": "listening", "text": "She goes to the park on Sunday."},
+    {"task": "listening", "text": "The bookstore is next to the bank."},
+    {"task": "speaking", "text": "What time does the train arrive?"},
+    {"task": "speaking", "text": "I would like a glass of water, please."},
+    {"task": "speaking", "text": "Can you help me carry this bag?"}
+  ],
+  "B1": [
+    {"task": "listening", "text": "If it rains tomorrow, we will cancel the picnic."},
+    {"task": "listening", "text": "He has been learning English for three years."},
+    {"task": "listening", "text": "The meeting has been postponed until next Friday."},
+    {"task": "speaking", "text": "I am looking forward to hearing from you soon."},
+    {"task": "speaking", "text": "Could you explain the main reason for the delay?"},
+    {"task": "speaking", "text": "We should consider all the possible options."}
+  ],
+  "B2": [
+    {"task": "listening", "text": "The study suggests that early intervention significantly reduces long-term costs."},
+    {"task": "listening", "text": "Despite the economic downturn, the company managed to increase its revenue."},
+    {"task": "listening", "text": "Scientists have identified a new species in the deep ocean trench."},
+    {"task": "speaking", "text": "From my perspective, the advantages outweigh the disadvantages."},
+    {"task": "speaking", "text": "I would argue that the policy needs a thorough reassessment."},
+    {"task": "speaking", "text": "The findings raise a number of important methodological questions."}
+  ]
+}
