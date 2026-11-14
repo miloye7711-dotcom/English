@@ -16,6 +16,10 @@ import os
 import re
 from dataclasses import dataclass, field
 
+# Default HF mirror (China); override by setting HF_ENDPOINT yourself.
+os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+
 
 @dataclass
 class WordPhonemeFeedback:
@@ -108,39 +112,67 @@ class PhonemeScorer:
         return torch.softmax(logits, dim=-1)[0].cpu().numpy()  # (T, V)
 
     def _forced_align_words(self, posteriors, words: list[str]):
-        """Even-segment baseline alignment: split frames evenly across words,
-        then average each word's character posterior over its span.
+        """Align reference characters to the model's active speech frames.
+
+        Frames predicted as pad/boundary are dropped; a simple DTW maps each
+        reference letter onto the corresponding recognized frame, and the word
+        confidence is the mean posterior of its aligned letter frames.
 
         Returns list of (word, confidence).
         """
         import numpy as np
         vocab = self._processor.tokenizer.get_vocab()
+        inv = {v: k for k, v in vocab.items()}
+        pad_id = vocab.get("<pad>", 0)
+        boundary = "|" if "|" in vocab else " "
         T, V = posteriors.shape
-        # expected character sequence (lowercase letters + spaces)
-        expected_chars = []
-        for w in words:
-            expected_chars.extend(list(w.lower()))
-            expected_chars.append(" ")
-        n = len(expected_chars)
-        if n == 0:
+
+        # active speech frames: top predicted token is a real letter (not pad/boundary)
+        active = []  # (frame_idx, token_char)
+        for t in range(T):
+            cid = int(posteriors[t].argmax())
+            tok = inv.get(cid, "")
+            if cid == pad_id or tok == boundary:
+                continue
+            active.append((t, tok.upper()))
+
+        # reference letters grouped per word
+        ref_words = [w.upper() for w in words]
+        ref_chars = [c for w in ref_words for c in w]
+        if not ref_chars:
             return [(w, 0.0) for w in words]
-        # even split frames across characters
-        boundaries = np.linspace(0, T, n + 1).astype(int)
-        char_conf = []
-        for i, ch in enumerate(expected_chars):
-            s, e = boundaries[i], boundaries[i + 1]
-            if e <= s:
-                e = s + 1
-            cid = vocab.get(ch)
-            char_conf.append(float(posteriors[s:e, cid].mean()) if cid is not None else 0.0)
-        # group char confidences back into words
+
+        # Strict monotonic alignment: walk reference chars left-to-right, bind
+        # each to the best-matching active frame at/after the previous one.
+        n, m = len(ref_chars), len(active)
+        aligned_frame: list[int | None] = [None] * n
+        cursor = 0
+        for i, rc in enumerate(ref_chars):
+            best_j, best_score = None, -1.0
+            for j in range(cursor, m):
+                ac = active[j][1]
+                score = 1.0 if rc == ac else 0.0
+                # prefer exact match; among ties keep the earliest frame
+                if score > best_score:
+                    best_j, best_score = j, score
+            if best_j is not None:
+                aligned_frame[i] = active[best_j][0]
+                cursor = best_j + 1  # monotonic: next char binds after this frame
+
+        # gather per-word confidence from aligned letter frames
+        vocab_upper = {k.upper(): v for k, v in vocab.items()}
         out = []
         idx = 0
-        for w in words:
-            k = len(w)
-            wconf = char_conf[idx:idx + k]
-            out.append((w, sum(wconf) / max(1, len(wconf))))
-            idx += k + 1  # +1 for space
+        for orig, w in zip(words, ref_words):
+            confs = []
+            for ch in w:
+                f = aligned_frame[idx]
+                if f is not None:
+                    cid = vocab_upper.get(ch.upper())
+                    if cid is not None:
+                        confs.append(float(posteriors[f, cid]))
+                idx += 1
+            out.append((orig, sum(confs) / len(confs) if confs else 0.0))
         return out
 
     def score(self, reference_text: str, audio_path: str,

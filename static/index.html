@@ -27,6 +27,18 @@
   .ok { color:var(--ok); } .bad { color:var(--bad); }
   .muted { color:var(--muted); }
   .hidden { display:none; }
+
+  /* board selection */
+  .boards { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:10px; }
+  @media (max-width:560px){ .boards { grid-template-columns:1fr; } }
+  .board { background:#0b1220; border:1px solid #334155; border-radius:14px;
+           padding:26px 22px; text-align:center; cursor:pointer; transition:border-color .15s, transform .15s; }
+  .board:hover { border-color:var(--accent); transform:translateY(-2px); }
+  .board .icon { font-size:34px; }
+  .board .title { font-size:18px; font-weight:700; margin:10px 0 6px; }
+  .board .desc { font-size:13px; color:var(--muted); line-height:1.6; }
+  .crumb { display:inline-flex; align-items:center; gap:8px; font-size:14px; margin-bottom:14px; cursor:pointer; color:var(--muted); }
+  .crumb:hover { color:var(--accent); }
 </style>
 </head>
 <body>
@@ -34,7 +46,29 @@
   <h1>英语听说自适应训练闭环</h1>
   <div class="bar" id="bar">加载中…</div>
 
-  <div class="card" id="quizCard">
+  <!-- board selection screen -->
+  <div class="card" id="boardCard">
+    <div class="task-label">选择训练板块</div>
+    <div class="boards">
+      <div class="board" data-board="listening">
+        <div class="icon">🎧</div>
+        <div class="title">听力听写</div>
+        <div class="desc">播放英文句子，听音后写下听到的单词，系统逐词核对准确率。</div>
+      </div>
+      <div class="board" data-board="speaking">
+        <div class="icon">🗣️</div>
+        <div class="title">口语跟读</div>
+        <div class="desc">看着句子跟读，把所说内容填入文本框，系统对照原文纠正读音与漏词。</div>
+      </div>
+    </div>
+    <div class="row">
+      <button class="secondary" id="resetBtn2">重置进度</button>
+    </div>
+  </div>
+
+  <!-- practice screen -->
+  <div class="card hidden" id="quizCard">
+    <div class="crumb" id="backBtn">‹ 返回选择板块</div>
     <div class="task-label" id="taskLabel">任务</div>
     <div class="sentence" id="sentence"></div>
 
@@ -45,8 +79,12 @@
     </div>
 
     <div id="speakPanel" class="hidden">
-      <div class="muted">跟读下面这句，并把你说的转写文本填进来（演示模式；接入 Whisper 后可直接录音）：</div>
-      <input type="text" id="speakInput" placeholder="what you said...">
+      <div class="muted">跟读下面这句：点「开始录音」说完后停止，系统用 Whisper 转写并评分；也可以直接在框里手打你说的内容。</div>
+      <div class="row">
+        <button id="recBtn" class="secondary">● 开始录音</button>
+        <span class="muted" id="recStatus"></span>
+      </div>
+      <input type="text" id="speakInput" placeholder="what you said...（录音后自动填入转写结果）" style="margin-top:12px">
     </div>
 
     <div class="row">
@@ -59,6 +97,9 @@
 
 <script>
 let currentItem = null;
+let activeBoard = null;   // "listening" | "speaking"
+let mediaRecorder = null;
+let recordedBlob = null;
 
 async function getJSON(url, opts={}) {
   const r = await fetch(url, opts); return r.json();
@@ -70,37 +111,110 @@ function speak(text) {
   speechSynthesis.cancel(); speechSynthesis.speak(u);
 }
 
-async function refresh() {
-  const st = await getJSON("/api/state");
-  document.getElementById("bar").innerHTML = `
-    当前等级 <b>${st.level}</b> · 阶段 <b>${st.phase}</b> · 弱项 <b>${st.weakness}</b> ·
-    本阶段已练 <b>${st.practice_count}</b> 单元`;
-  await loadNext();
+function refreshBar() {
+  return getJSON("/api/state").then(st => {
+    document.getElementById("bar").innerHTML =
+      `当前等级 <b>${st.level}</b> · 阶段 <b>${st.phase}</b> · 弱项 <b>${st.weakness}</b> · 本阶段已练 <b>${st.practice_count}</b> 单元`;
+    return st;
+  });
 }
 
+// ---- board selection ----
+function showBoards() {
+  activeBoard = null;
+  document.getElementById("boardCard").classList.remove("hidden");
+  document.getElementById("quizCard").classList.add("hidden");
+  refreshBar();
+}
+
+function enterBoard(board) {
+  activeBoard = board;
+  document.getElementById("boardCard").classList.add("hidden");
+  document.getElementById("quizCard").classList.remove("hidden");
+  loadNext();
+}
+
+document.querySelectorAll(".board").forEach(el => {
+  el.onclick = () => enterBoard(el.dataset.board);
+});
+document.getElementById("backBtn").onclick = showBoards;
+
+// ---- practice loop ----
 async function loadNext() {
   const data = await getJSON("/api/next");
-  if (data.batch_done) {
-    handleBatchDone(data); return;
-  }
+  if (data.batch_done) { handleBatchDone(data); return; }
   currentItem = data.item;
   const fb = document.getElementById("feedback");
   fb.classList.add("hidden");
   if (!currentItem) { document.getElementById("sentence").textContent = "完成"; return; }
+
+  // keep the session consistent with the chosen board; if the next item belongs to
+  // the other side, swap it to the active board from the same level bank.
+  if (currentItem.task !== activeBoard) {
+    const alt = await findAlternate(activeBoard);
+    if (alt) currentItem = alt;
+  }
+
   const isListen = currentItem.task === "listening";
   document.getElementById("taskLabel").textContent =
     (isListen ? "听力听写 " : "口语跟读 ") + "· " + currentItem.level;
   document.getElementById("listenPanel").classList.toggle("hidden", !isListen);
   document.getElementById("speakPanel").classList.toggle("hidden", isListen);
-  // For listening: hide the sentence text (user must hear it).
   document.getElementById("sentence").textContent = isListen ? "（听句子，然后听写）" : currentItem.text;
   document.getElementById("listenInput").value = "";
   document.getElementById("speakInput").value = "";
-  if (isListen) {
-    document.getElementById("playBtn").onclick = () => speak(currentItem.text);
-  } else {
-    document.getElementById("playBtn").onclick = () => speak(currentItem.text);
+  recordedBlob = null;
+  resetRecUI();
+  document.getElementById("playBtn").onclick = () => speak(currentItem.text);
+}
+
+// ---- microphone recording ----
+const recBtn = document.getElementById("recBtn");
+const recStatus = document.getElementById("recStatus");
+
+function resetRecUI() {
+  recBtn.textContent = "● 开始录音";
+  recBtn.classList.remove("recording");
+  recStatus.textContent = "";
+}
+
+async function toggleRecording() {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop();
+    return;
   }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    recStatus.textContent = "当前浏览器不支持录音（需 HTTPS 或 localhost），可手打转写。";
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    const chunks = [];
+    mediaRecorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      recordedBlob = new Blob(chunks, { type: mediaRecorder.mimeType });
+      stream.getTracks().forEach(t => t.stop());
+      recBtn.textContent = "● 开始录音";
+      recStatus.textContent = "已录音 " + (recordedBlob.size / 1024).toFixed(1) + " KB，可提交或重录";
+    };
+    mediaRecorder.start();
+    recBtn.textContent = "■ 停止录音";
+    recStatus.textContent = "录音中…说完后点停止";
+  } catch (err) {
+    recStatus.textContent = "麦克风不可用：" + err.message + "（可手打转写）";
+  }
+}
+recBtn.onclick = toggleRecording;
+
+// Find an item of the active board for the current level from the bank.
+async function findAlternate(board) {
+  const bank = await getJSON("/api/bank");
+  const st = await getJSON("/api/state");
+  const rows = (bank[st.level] || []).filter(r => r.task === board);
+  if (!rows.length) return null;
+  const idx = Math.floor(Math.random() * rows.length);
+  return { item_id: `${st.level}-${board}-${idx}`, level: st.level, task: board, text: rows[idx].text };
 }
 
 function handleBatchDone(data) {
@@ -117,7 +231,7 @@ function handleBatchDone(data) {
             <span class="${cls}"><b>${e.action}</b></span>。${e.reason}`;
   }
   fb.innerHTML = html + "<br><span class='muted'>即将进入下一阶段…</span>";
-  setTimeout(refresh, 1800);
+  setTimeout(showBoards, 1800);
 }
 
 async function submit() {
@@ -128,24 +242,50 @@ async function submit() {
   if (currentItem.task === "listening") {
     fd.append("listening_text", document.getElementById("listenInput").value);
   } else {
-    fd.append("speaking_transcript", document.getElementById("speakInput").value);
+    // If a recording exists, let the backend transcribe it with Whisper;
+    // otherwise fall back to the typed transcript.
+    if (recordedBlob) {
+      fd.append("audio", recordedBlob, "speaking.webm");
+    } else {
+      fd.append("speaking_transcript", document.getElementById("speakInput").value);
+    }
   }
-  const res = await getJSON("/api/answer", { method:"POST", body: fd });
   const fb = document.getElementById("feedback");
   fb.classList.remove("hidden");
+  fb.innerHTML = currentItem.task === "speaking" && recordedBlob
+    ? "正在识别语音并评分…" : "提交中…";
+  const res = await getJSON("/api/answer", { method:"POST", body: fd });
   const sc = res.score;
-  fb.innerHTML = `准确率 <b class="${sc.accuracy>=0.75?'ok':'bad'}">${(sc.accuracy*100).toFixed(0)}%</b>
+  let html = `准确率 <b class="${sc.accuracy>=0.75?'ok':'bad'}">${(sc.accuracy*100).toFixed(0)}%</b>
     · WER ${sc.wer}
     ${sc.wrong_words.length ? '<br>需注意的词：<span class="bad">'+sc.wrong_words.join(", ")+'</span>' : '<br><span class="ok">全对！</span>'}`;
-  // brief pause then load next
+  if (res.transcript) html += `<br><span class="muted">识别结果：${res.transcript}</span>`;
+  if (res.phoneme && res.phoneme.available) {
+    const p = res.phoneme;
+    html += `<br><span class="muted">发音音素分 ${(p.overall_accuracy*100).toFixed(0)}%</span>`;
+    if (p.words && p.words.length) {
+      const tags = p.words.map(w => {
+        const ph = w.expected_phonemes.join(" ");
+        return w.weak
+          ? `<span class="bad" title="音素 ${ph}">${w.word}▲</span>`
+          : `<span title="音素 ${ph}">${w.word}</span>`;
+      }).join(" ");
+      html += `<br>词级发音：${tags}`;
+      if (p.weak_words && p.weak_words.length) {
+        html += `<br><span class="bad">需重点纠正：${p.weak_words.join(", ")}</span>`;
+      }
+    }
+  }
+  fb.innerHTML = html;
   setTimeout(loadNext, 900);
 }
 
 document.getElementById("submitBtn").onclick = submit;
-document.getElementById("resetBtn").onclick = async () => {
-  await getJSON("/api/reset", {method:"POST"}); refresh();
-};
-refresh();
+async function doReset() { await getJSON("/api/reset", {method:"POST"}); showBoards(); }
+document.getElementById("resetBtn").onclick = doReset;
+document.getElementById("resetBtn2").onclick = doReset;
+
+showBoards();
 </script>
 </body>
 </html>

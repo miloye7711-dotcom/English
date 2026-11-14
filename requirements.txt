@@ -1,9 +1,17 @@
 fastapi>=0.110
 uvicorn>=0.29
 python-multipart>=0.0.9
-# optional: real phoneme-level pronunciation scoring (GPU recommended)
+
+# speaking: real speech-to-text via faster-whisper (CTranslate2, GPU optional)
+faster-whisper>=1.2.1
+# CUDA 12 runtime libs needed on Windows when running on GPU (cuBLAS/NVRTC)
+nvidia-cublas-cu12 ; sys_platform == "win32"
+
+# optional: phoneme-level pronunciation scoring (wav2vec2 + g2p_en)
+# CPU wheel is enough for short utterances; use the CUDA build for GPU speed.
 torch>=2.1
 transformers>=4.40
 librosa>=0.10
 soundfile>=0.12
 g2p_en>=2.1
+nltk>=3.9

@@ -25,6 +25,11 @@ def state():
     return trainer.s.as_dict()
 
 
+@app.get("/api/bank")
+def bank():
+    return trainer.bank
+
+
 @app.get("/api/next")
 def next_item():
     it = trainer.next_item()
@@ -68,6 +73,8 @@ async def answer(
     result = trainer.submit(it, listening_text=listening_text,
                             speaking_transcript=speaking_transcript,
                             speaking_confidence=conf)
+    if task == "speaking":
+        result["transcript"] = speaking_transcript
     # phoneme-level feedback when audio was provided and scorer is available
     if audio_path and task == "speaking":
         try:

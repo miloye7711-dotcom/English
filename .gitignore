@@ -12,3 +12,5 @@ nltk_data/
 *.pt
 *.bin
 models/
+_server.log
+_server.err.log
